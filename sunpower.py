@@ -20,10 +20,17 @@ Usage:
   sunpower getSolarEnergyOverTime (-t=<id> | -u=<username> [-p=<password>])
   sunpower getUserPreference (-t=<id> | -u=<username> [-p=<password>]) <key>
   sunpower getAllUserPreference (-t=<id> | -u=<username> [-p=<password>])
+  sunpower getCMSArticles (-t=<id> | -u=<username> [-p=<password>])
   sunpower getAlerts (-t=<id> | -u=<username> [-p=<password>]) [--dashboard]
   sunpower getSolarEnergyOverTimeAggregateParam (-t=<id> | -u=<username> [-p=<password>]) 
   sunpower getSystemInfo [-u=<username>] ([-p=<password>] | [-t=<id>])
   sunpower getSiteInfo (-t=<id> | -u=<username> [-p=<password>]) 
+  sunpower UtilityRates (-t=<id> | -u=<username> [-p=<password>]) <zip>
+  sunpower utilities (-t=<id> | -u=<username> [-p=<password>])
+  sunpower MajorPowerBillUtilities (-t=<id> | -u=<username> [-p=<password>])
+  sunpower getBillSavingAmountRest (-t=<id> | -u=<username> [-p=<password>]) 
+  sunpower getBillSavingAmount (-t=<id> | -u=<username> [-p=<password>])
+  sunpower computeDetailedBillSavings (-t=<id> | -u=<username> [-p=<password>]) 
   sunpower getLatestTimestamp (-t=<id> | -u=<username> [-p=<password>]) 
   sunpower linkRainforest (-t=<id> | -u=<username> [-p=<password>]) <cloud_id>
   sunpower unlinkRainforest (-t=<id> | -u=<username> [-p=<password>]) <cloud_id>
@@ -60,182 +67,155 @@ requests_log = logging.getLogger("requests.packages.urllib3")
 requests_log.setLevel(logging.ERROR)
 requests_log.propagate = True
 
-BASE_URL = "https://monitor.us.sunpower.com/CustomerPortal/SystemInfo/SystemInfo.svc/"
-AUTH_URL = "https://monitor.us.sunpower.com/CustomerPortal/Auth/Auth.svc/"
-SITE_URL = "https://monitor.us.sunpower.com/CustomerPortal/SiteInfo/SiteInfo.svc/"
-ALERT_URL = "https://monitor.us.sunpower.com/CustomerPortal/AlertsInfo/AlertsInfo.svc/"
+"""
+APIs available using this pattern:
+https://monitor.us.sunpower.com/CustomerPortal/SystemInfo/SystemInfo.svc/help
+"""
 
-actions = {}
-def action(func):
-    actions[func.__name__] = func
-    return func
 
-@action
-def getUserPreference(args):
-    url = ALERT_URL + "getUserPreference" + "?id=" + args["-t"] + "&key=" + args["<key>"]
-    r = requests.get(url)
-    pprint(r.json())
+class sunpower:
+    """A class to access sunpowers api.  This is not a public API so it might fail at any time.
+    if you find this usefull please complain to sunpower and your sunpower dealer that they
+    do not have a public API"""
+    def __init__(self,
+                 username = None,
+                 password = None,
+                 token = None,
+                 base = "https://monitor.us.sunpower.com/CustomerPortal/"):
+        self.system_info_url = "{0}SystemInfo/SystemInfo.svc/".format(base)
+        self.site_info_url = "{0}SiteInfo/SiteInfo.svc/".format(base)
+        self.alerts_info_url = "{0}AlertsInfo/AlertsInfo.svc/".format(base)
+        self.auth_url = "{0}Auth/Auth.svc/".format(base)
+        self.bill_savings_url = "{0}BillSavings/BillSavings.svc/".format(base)
+        if not token:
+            self.token = self.authenticate(username, password)
+        else:
+            self.token = token
 
-@action
-def getAlerts(args):
-    url = ALERT_URL + "getAlerts" + "?id=" + args["-t"] + "&isDashboard="
-    if args["--dashboard"]:
-        url += "true"
-    else:
-        url += "false"
-    r = requests.get(url)
-    pprint(r.json())
+    def generic_command(self, url, command, id_field, args = {}):
+        args.update({id_field: self.token})
+        return requests.get(url + command, params = args).json()
+        
+    def system_info(self, command, id_field = 'id', args = {}):
+        return self.generic_command(self.system_info_url, command, id_field, args)
 
-@action
-def getAllUserPreference(args):
-    url = ALERT_URL + "getAllUserPreference" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
+    def alerts_info(self, command, id_field = 'id', args = {}):
+        return self.generic_command(self.alerts_info_url, command, id_field, args)
 
-@action
-def getACPVModuleInfo(args):
-    """Gets a lot of system data back including per-panel production!"""
-    url = BASE_URL + "getACPVModuleInfo" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
+    def site_info(self, command, id_field = 'id', args = {}):
+        return self.generic_command(self.site_info_url, command, id_field, args)
 
-@action
-def getSiteInfo(args):
-    """Gets a lot of system data back including per-panel production!"""
-    url = SITE_URL + "getSiteInfo" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
+    def bill_savings(self, command, id_field = 'id', args = {}):
+        return self.generic_command(self.bill_savings_url, command, id_field, args)
 
-@action
-def getLatestTimestamp(args):
-    """Gets a lot of system data back including per-panel production!"""
-    url = SITE_URL + "GetLatestTimestamp" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
+    def get_site_info(self):
+        return self.site_info("GetSiteInfo")
 
-@action
-def authenticate(args):
-    """Get token from user/password"""
-    url = AUTH_URL + "Authenticate"
-    r = requests.post(url,
-                      data = json.dumps({"username": args["-u"],
-                                         "password": args["-p"],
-                                         "isPersistent": "false"}),
-                      headers = {'Content-type': 'application/json'}
+    def get_real_time_net_display(self):
+        return self.system_info("getRealTimeNetDisplay")
+
+    def get_pv_production_data(self):
+        return self.system_info("getPVProductionData")
+
+    def get_pv_consumption_data(self):
+        return self.system_info("getPVConsumptionData")
+
+    def get_module_series_info(self):
+        return self.system_info("getModuleSeriesInfo")
+
+    def get_ac_pv_module_info(self):
+        return self.system_info("getACPVModuleInfo")
+
+    def get_component_tree(self):
+        return self.system_info("getComponentTree")
+
+    def get_component_data_last(self, component_type_id, component_id):
+        return self.system_info("getComponentDataLast", args = {"componentTypeId": component_type_id,
+                                                                "componentId": component_id})
+
+    def get_health_guidance_info(self):
+        return self.system_info("getHealthGuidanceInfo")
+
+    def get_system_info(self, username):
+        return self.system_info("GetSystemInfo", args = {"username": username})
+
+    def get_latest_timestamp(self):
+        return self.site_info("GetLatestTimestamp")
+
+    def get_alerts(self, is_dashboard = True):
+        return self.alerts_info("getAlerts", args = {"isDashboard": is_dashboard})
+
+    def get_all_user_preference(self):
+        return self.alerts_info("getAllUserPreference")
+
+    def get_cms_articles(self):
+        return self.alerts_info("getCMSArticles")
+
+    def utility_rates(self, zip):
+        return self.bill_savings("UtilityRates", args = {"postalCode" : zip})
+
+    def major_power_bill_utilities(self):
+        return self.bill_savings("MajorPowerBillUtilities")
+
+    def authenticate(self, username, password):
+        """Get token from user/password"""
+        r = requests.post(self.auth_url + "Authenticate",
+                          data = json.dumps({"username": username,
+                                             "password": password,
+                                             "isPersistent": "false"}),
+                          headers = {'Content-type': 'application/json'}
                       )
-    token = r.json()["Payload"]["TokenID"]
-    return token
+        return r.json()["Payload"]["TokenID"]
 
-@action
-def getComponentTree(args):
-    """Gets a tree of devices, seems like monitoring hardware and inverters in my case"""
-    url = BASE_URL + "getComponentTree" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getComponentDataLast(args):
-    """ This seems to be able to fetch extra data about a part of the system, haven't found where to get type ids but 1 seems to be a panel
-    I get data back using the moduleId from getACPVModuleInfo but its less data than there"""
-    url = BASE_URL + "getComponentDataLast" + "?id=" + args["-t"] + "&componentTypeId=" + args["<componentTypeId>"] + "&componentId=" + args["<componentId>"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getHealthGuidanceInfo(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getHealthGuidanceInfo" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getSystemInfo(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getSystemInfo" + "?id=" + args["-t"]
-    if args["-u"]:
-        url += "&username=" + args["-u"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getRealTimeNetDisplay(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getRealTimeNetDisplay" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getPVProductionData(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getPVProductionData" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getPVConsumptionData(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getPVConsumptionData" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getModuleSeriesInfo(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getModuleSeriesInfo" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getEnvironmentImpact(args):
-    """ Small bit of system health info """
-    url = BASE_URL + "getEnvironmentImpact" + "?id=" + args["-t"]
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getEnergyData(args):
-    """ Get overall system power history, looks like this is in system local time 'minute' returns every five minutes for me """
-    if args["<startDateTime>"] == None:
-        start = (datetime.datetime.now() - datetime.timedelta( hours = 24))
-        start = start.replace(microsecond = 0)
-        args["<startDateTime>"] = start.isoformat("T")
-    if args["<endDateTime>"] == None:
-        end = datetime.datetime.now()
-        end = end.replace(microsecond = 0)
-        args["<endDateTime>"] = end.isoformat("T")
-    if args["<interval>"] == None:
-        args["<interval>"] = "minute"
-    url = BASE_URL + "getEnergyData" + "?guid=" + args["-t"] + "&startDateTime=" + args["<startDateTime>"] + "&endDateTime=" + args["<endDateTime>"] + "&interval=" + args["<interval>"]
-    print url
-    r = requests.get(url)
-    pprint(r.json())
-
-@action
-def getHourlyEnergyData(args):
-    """ Get hourly energy data defaults to a day"""
-    if args["<timestamp>"] == None:
-        start = (datetime.datetime.now())
-        start = start.replace(microsecond = 0)
-        start = start.replace(second = 0)
-        start = start.replace(minute = 0)
-        start = start - datetime.timedelta(hours = 24)
-        args["<timestamp>"] = start.isoformat("T")
-    url = BASE_URL + "getHourlyEnergyData" + "?tokenid=" + args["-t"] + "&timestamp=" + args["<timestamp>"]
-    r = requests.get(url)
-    pprint(r.json())
+def json_pretty(json_input):
+    return json.dumps(json_input, sort_keys=True,
+                      indent=4, separators=(',', ': '))
 
 if __name__ == "__main__":
     arguments = docopt.docopt(__doc__, version='Sunpower 1.0')
+    sp = None
     if not arguments["-t"]:
         if not arguments["-u"]:
             print "No Valid Auth"
             sys.exit(1)
         elif not arguments["-p"]:
             arguments["-p"] = getpass.getpass()
-        arguments["-t"] = authenticate(arguments)
+        sp = sunpower(username = arguments["-u"], password = arguments["-p"])
         if arguments["authenticate"]:
-            print arguments["-t"]
+            print sp.token
             sys.exit(0)
-    for a in actions:
-        if arguments.has_key(a) and arguments[a] == True:
-            actions[a](arguments)
+    else:
+        sp = sunpower(token = arguments["-t"])
+    if arguments["getSiteInfo"]:
+        print json_pretty(sp.get_site_info())
+    elif arguments["getLatestTimestamp"]:
+        print json_pretty(sp.get_latest_timestamp())
+    elif arguments["getAlerts"]:
+        print json_pretty(sp.get_alerts(arguments["--dashboard"]))
+    elif arguments["getAllUserPreference"]:
+        print json_pretty(sp.get_all_user_preference())
+    elif arguments["getCMSArticles"]:
+        print json_pretty(sp.get_cms_articles())
+    elif arguments["MajorPowerBillUtilities"]:
+        print json_pretty(sp.major_power_bill_utilities())
+    elif arguments["UtilityRates"]:
+        print json_pretty(sp.utility_rates(arguments["<zip>"]))
+    elif arguments["getSystemInfo"]:
+        print json_pretty(sp.get_system_info(arguments["-u"]))
+    elif arguments["getRealTimeNetDisplay"]:
+        print json_pretty(sp.get_real_time_net_display())
+    elif arguments["getPVProductionData"]:
+        print json_pretty(sp.get_pv_production_data())
+    elif arguments["getPVConsumptionData"]:
+        print json_pretty(sp.get_pv_consumption_data())
+    elif arguments["getModuleSeriesInfo"]:
+        print json_pretty(sp.get_module_series_info())
+    elif arguments["getHealthGuidanceInfo"]:
+        print json_pretty(sp.get_health_guidance_info())
+    elif arguments["getACPVModuleInfo"]:
+        print json_pretty(sp.get_ac_pv_module_info())
+    elif arguments["getComponentTree"]:
+        print json_pretty(sp.get_component_tree())
+    elif arguments["getComponentDataLast"]:
+        print json_pretty(sp.get_component_data_last(arguments["<componentTypeId>"],
+                                                     arguments["<componentId>"]))
