@@ -97,6 +97,7 @@ class sunpower:
         return requests.get(url + command, params = args).json()
         
     def system_info(self, command, id_field = 'id', args = {}):
+        print args
         return self.generic_command(self.system_info_url, command, id_field, args)
 
     def alerts_info(self, command, id_field = 'id', args = {}):
@@ -113,6 +114,13 @@ class sunpower:
 
     def get_real_time_net_display(self):
         return self.system_info("getRealTimeNetDisplay")
+
+    def get_energy_data(self, interval, start, end):
+        """ This appears to take time in local to system time? """
+        return self.system_info("getEnergyData", id_field = "guid",
+                                args = {"interval": interval,
+                                        "startDateTime": self.datetime_to_sunpower(start),
+                                        "endDateTime": self.datetime_to_sunpower(end)})
 
     def get_pv_production_data(self):
         return self.system_info("getPVProductionData")
@@ -167,6 +175,13 @@ class sunpower:
                       )
         return r.json()["Payload"]["TokenID"]
 
+    def datetime_to_sunpower(self, in_datetime):
+        in_datetime = in_datetime.replace(microsecond = 0)
+        in_datetime = in_datetime.replace(second = 0)
+        return in_datetime.isoformat("T")
+
+
+
 def json_pretty(json_input):
     return json.dumps(json_input, sort_keys=True,
                       indent=4, separators=(',', ': '))
@@ -219,3 +234,14 @@ if __name__ == "__main__":
     elif arguments["getComponentDataLast"]:
         print json_pretty(sp.get_component_data_last(arguments["<componentTypeId>"],
                                                      arguments["<componentId>"]))
+    elif arguments["getEnergyData"]:
+        interval = "minute"
+        if arguments["<interval>"]:
+            interval = arguments["<interval>"]
+        endDateTime = datetime.datetime.now()
+        if arguments["<endDateTime>"]:
+            endDateTime = arguments["<endDateTime>"]
+        startDateTime = (datetime.datetime.now() - datetime.timedelta(hours = 24))
+        if arguments["<startDateTime>"]:
+            startDateTime = arguments["<startDateTime>"]
+        print json_pretty(sp.get_energy_data(interval, startDateTime, endDateTime))
