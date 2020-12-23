@@ -1,3 +1,6 @@
+# Update 12/23/20
+Sunpower killed off the old web-api (expected to happen now and then).  Did some digging to update this to make it useful.  I seem to have a failing panel and wanted to get the per-panel data (still available in components report!).  Pushed the fixes, used developer tools and https://github.com/jeffkowalski/sunpower thanks @jeffkowalski 
+
 # Update 1/18/20
 Added my new code fo the manager direct.  Also added my diamond collectors in their current state
 
